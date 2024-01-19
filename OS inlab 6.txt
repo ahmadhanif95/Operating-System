@@ -1,0 +1,93 @@
+#include <sys/wait.h>
+#include<assert.h>
+#include<stdio.h>
+#include<unistd.h>
+#include<string.h>
+#include<stdlib.h>
+#include<sys/ipc.h>
+#include<sys/shm.h>
+#include<string.h>
+#include<ctype.h>
+int size = 1000;
+int main(int argc,char*argv[])
+{
+
+key_t key = 30;
+int shmid = shmget(key,size,0666|IPC_CREAT|IPC_EXCL);
+if(shmid ==-1)
+{
+	perror("shmget");
+	exit(EXIT_FAILURE);
+}
+pid_t cpid=fork();
+if(cpid == -1)
+{
+	perror("fork");
+	exit(EXIT_FAILURE);
+}
+
+
+if(cpid ==0)
+{
+	char *buffer = malloc(sizeof(char)*size);
+	buffer = shmat(shmid,NULL,0);
+	if(buffer == (char*)-1)
+	{
+	perror("shmat");
+	exit(EXIT_FAILURE);
+	}
+	char data[size];
+	FILE *fptr = fopen(argv[1],"r");
+	fread(data,size,1,fptr);
+	
+	fclose(fptr);
+	for (int i=0; i<size; i++)
+	{
+  		buffer[i] = data[i];
+  		if(data[i] == '$')
+  		{
+  			buffer[i] = data[i];
+  			break;
+  		}
+  		 
+  	}	
+  	sleep(2);
+  	
+  	fptr = fopen(argv[1],"w");
+  	for (int i=0; i<size && buffer[i]!='$'; i++)
+  	fprintf(fptr,"%c",buffer[i]);
+  	fprintf(fptr,"%c",'$');
+  	fclose(fptr);
+	shmdt(buffer);
+	exit(EXIT_SUCCESS);
+}
+else
+{
+	sleep(1);
+	char *buffer = (char*)shmat(shmid,NULL,0666);
+	//	printf("%s\n", buffer);
+	
+	for(int i=0;buffer[i] != '\0' && i<size;i++)
+	{
+		if(islower(buffer[i]))
+		{ 
+		buffer[i] = toupper(buffer[i]);
+		}
+		else if( isupper(buffer[i]))
+			buffer[i]= tolower(buffer[i]);
+		else if(buffer[i] >= '1' && buffer[i] <='9')
+			buffer[i] = ' '; 
+		
+	}
+	//printf("%s\n",buffer);
+	wait(NULL);
+	shmdt(buffer);
+	if (shmctl(shmid, IPC_RMID, NULL) == -1) 
+		{
+   		    perror("shmctl");
+   		    return 0;
+   		}
+	
+	exit(EXIT_SUCCESS);
+}
+}
